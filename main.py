@@ -1,6 +1,7 @@
-from email.policy import default
+from requests_toolbelt.multipart import encoder
 import string
 from sys import stderr, stdout
+import time
 import requests
 from dataclasses import dataclass
 import os
@@ -10,9 +11,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 def prettyprint_json(raw_json: str, file=stdout):
     parsed = json.loads(raw_json)
     print(json.dumps(parsed, indent=4, sort_keys=True), file=file)
+
 
 @dataclass
 class Config:
@@ -30,18 +33,24 @@ class Request:
         response = cls.send_request(url=url, data=data)
         if response.status_code != 200:
             print("Bad credentials")
-            os.system.exit(127)
+            return
         token = response.json().get("access_token")
         print("Login in")
         cls.credentials = {"Authorization" : f"Bearer {token}"}
+        return token
     
     @classmethod
-    def send_request(cls, url, method="post", *args, **kwargs):
+    def send_request(cls, url, method="post", headers=None, *args, **kwargs):
+        if headers:
+            headers = dict(headers, **cls.credentials)
+        else:
+            headers = cls.credentials
+        
         try:
             requests_func = getattr(requests, method)
         except AttributeError:
             print("[PROGRAMMING ERROR] Wrong type of requests method", file=stderr)
-        response = requests_func(url, *args, **kwargs, headers=cls.credentials) 
+        response = requests_func(url, *args, **kwargs, headers=headers) 
         return response
         
 
@@ -56,11 +65,14 @@ def auth():
     password = input()
     if password == '':
         password = Config.default_password
-    Request.authorize_requests(
+    
+    token = Request.authorize_requests(
         url=Config.host + "/api/auth/login/",
         username=username,
         password=password,
     )
+    if not token:
+        auth()
 
 
 def create_task():
@@ -78,14 +90,18 @@ def create_task():
     
     print("Enter jenkins user(pass empty for random)")
     jenkins_user = input()
-    if jenkins_user is None:
+    if jenkins_user == '':
         jenkins_user = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
+    start = time.monotonic()
+    data = {"jenkins_user": jenkins_user}
     response = Request.send_request(
         url=Config.host + "/api/tasks/",
         files={"file": file},
-        data={"jenkins_user": jenkins_user},
+        data=data,
     )
+    total_time = time.monotonic() - start
+    print(f"Total time - {total_time}")
 
     if response.status_code == 201:
         print("Task created")
@@ -120,7 +136,8 @@ def main():
     action_association = {
         1: create_task,
         2: list_task,
-        3: get_task
+        3: get_task,
+        4: auth
     }
     print("Auth process")
     auth()
@@ -130,7 +147,8 @@ def main():
             "Choose action:\n" \
             "1. Create task\n" \
             "2. List tasks\n" \
-            "3. Get tasks\n"    
+            "3. Get tasks\n"
+            "4. Logout"    
         )
         try:
             action = action_association[int(input())]

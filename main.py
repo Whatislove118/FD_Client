@@ -20,8 +20,8 @@ def prettyprint_json(raw_json: str, file=stdout):
 @dataclass
 class Config:
     host = os.getenv("REMOTE_HOST", "localhost")
-    default_username = os.getenv("AUTH_USERNAME")   
-    default_password = os.getenv("AUTH_PASSWORD") 
+    default_username = os.getenv("AUTH_USERNAME", "user")   
+    default_password = os.getenv("AUTH_PASSWORD", "password") 
 
 
 class Request:
